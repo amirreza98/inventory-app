@@ -1,104 +1,283 @@
-// main() is where every Flutter app starts
-// MaterialApp is the root of the app
-// Scaffold gives us the basic page structure (appBar + body)
-// StatelessWidget — nothing changes yet, just a static screen
-
-
-
-
-// Import Flutter's Material Design library (UI components like Scaffold, AppBar, Text, etc.)
+// Import Material UI components
 import 'package:flutter/material.dart';
 
-// Entry point of every Flutter app
+// Entry point (unchanged)
 void main() {
-  // runApp starts the Flutter app and takes a Widget as input
-  // 'const' is used because MyApp is immutable (optimization)
   runApp(const MyApp());
 }
 
-// MyApp is the root widget of the application
-// StatelessWidget means it does NOT manage any internal state: meaning after creation the appriance wont change
+// Root app (unchanged)
 class MyApp extends StatelessWidget {
-
-  // Constructor for MyApp
-  // super.key allows Flutter to optimize widget rebuilding
   const MyApp({super.key});
 
-  // build() describes how the UI should look
   @override
   Widget build(BuildContext context) {
-
-    // MaterialApp is the top-level widget for a Material Design app
     return MaterialApp(
-
-      // Title of the app (used in task switchers, not visible in UI directly)
       title: 'Product Inventory',
-
-      // Removes the "DEBUG" banner in the top-right corner
       debugShowCheckedModeBanner: false,
-
-      // Theme configuration for the whole app
       theme: ThemeData(
-
-        // Generates a color scheme based on a seed color (blue here)
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-
-        // Enables Material Design 3 (modern UI style)
         useMaterial3: true,
       ),
-
-      // The first screen that will be shown when the app starts
       home: const InventoryPage(),
     );
   }
 }
 
-// InventoryPage is another screen (widget)
-// Also Stateless → UI does not change dynamically
-class InventoryPage extends StatelessWidget {
-
-  // Constructor
+// ───────────────────────────────────────────────────────────────
+// NEW: Converted from StatelessWidget → StatefulWidget
+// WHY: because UI now depends on changing data (products list)
+// ───────────────────────────────────────────────────────────────
+class InventoryPage extends StatefulWidget {
   const InventoryPage({super.key});
 
   @override
+  State<InventoryPage> createState() => _InventoryPageState();
+}
+
+// State class holds mutable data + logic
+class _InventoryPageState extends State<InventoryPage> {
+
+  // NEW: In-memory data store (very basic)
+  // List of Map instead of proper model → OK for demo, not production
+  List<Map<String, String>> products = [];
+
+  // NEW: Controllers to read user input from TextFields
+  final TextEditingController nameController = TextEditingController();
+  final TextEditingController quantityController = TextEditingController();
+
+  // NEW: Business logic → Add product
+  void addProduct() {
+
+    // Read and clean user input
+    String name = nameController.text.trim();
+    String quantity = quantityController.text.trim();
+
+    // Guard clause → prevent invalid input
+    if (name.isEmpty || quantity.isEmpty) return;
+
+    // CRITICAL: setState triggers UI rebuild
+    setState(() {
+      products.add({
+        'name': name,
+        'quantity': quantity,
+      });
+    });
+
+    // Reset input fields after action
+    nameController.clear();
+    quantityController.clear();
+  }
+
+  // NEW: Business logic → Remove product
+  void removeProduct(int index) {
+    setState(() {
+      products.removeAt(index);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-
-    // Scaffold provides a basic app layout structure
     return Scaffold(
-
-      // Top bar of the app
       appBar: AppBar(
-
-        // Background color comes from the theme's primary color
         backgroundColor: Theme.of(context).colorScheme.primary,
-
-        // Title displayed in the AppBar
         title: const Text(
           'Product Inventory',
-
-          // Styling the text (white + bold)
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
-
-        // Centers the title in the AppBar
         centerTitle: true,
       ),
 
-      // Main body of the screen
-      body: const Center(
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
 
-        // Center widget places its child in the middle of the screen
-        child: Text(
-          'Welcome to Product Inventory!',
+        child: Column(
+          children: [
 
-          // Text styling
-          style: TextStyle(
-            fontSize: 20,
-            color: Colors.grey,
-          ),
+            // ── Input card (mostly same, but now CONNECTED) ──────────
+            Card(
+              elevation: 3,
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Add New Product',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // NEW: connected to controller
+                    TextField(
+                      controller: nameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Product Name',
+                        hintText: 'e.g. Laptop',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.inventory_2),
+                      ),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // NEW: connected + numeric keyboard
+                    TextField(
+                      controller: quantityController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Quantity',
+                        hintText: 'e.g. 10',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.numbers),
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    SizedBox(
+                      width: double.infinity,
+
+                      child: ElevatedButton.icon(
+                        // NEW: wired to logic
+                        onPressed: addProduct,
+
+                        icon: const Icon(Icons.add),
+                        label: const Text(
+                          'Add Product',
+                          style: TextStyle(fontSize: 16),
+                        ),
+
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          backgroundColor:
+                              Theme.of(context).colorScheme.primary,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // ── NEW: Dynamic product count ───────────────────────────
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Products in Stock',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+
+                // Chip shows live count
+                Chip(
+                  label: Text('${products.length} items'),
+                  backgroundColor:
+                      Theme.of(context).colorScheme.primaryContainer,
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 10),
+
+            // ── NEW: Dynamic list rendering ──────────────────────────
+            Expanded(
+              // IMPORTANT: Expanded allows ListView to take remaining space
+              child: products.isEmpty
+
+                  // EMPTY STATE UI (good UX practice)
+                  ? const Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.inbox,
+                              size: 64, color: Colors.grey),
+                          SizedBox(height: 12),
+                          Text(
+                            'No products yet.\nAdd your first product above!',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Colors.grey,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+
+                  // LIST STATE
+                  : ListView.builder(
+                      // Efficient rendering (lazy loading)
+                      itemCount: products.length,
+
+                      itemBuilder: (context, index) {
+
+                        // Access current item
+                        final product = products[index];
+
+                        return Card(
+                          margin:
+                              const EdgeInsets.only(bottom: 8),
+
+                          child: ListTile(
+                            // LEFT: index badge
+                            leading: CircleAvatar(
+                              backgroundColor: Theme.of(context)
+                                  .colorScheme
+                                  .primaryContainer,
+
+                              child: Text(
+                                '${index + 1}',
+
+                                style: TextStyle(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .primary,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+
+                            // MAIN CONTENT
+                            title: Text(
+                              product['name']!,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+
+                            subtitle: Text(
+                              'Quantity: ${product['quantity']}',
+                            ),
+
+                            // RIGHT: delete button
+                            trailing: IconButton(
+                              icon: const Icon(
+                                Icons.delete_outline,
+                                color: Colors.red,
+                              ),
+
+                              // NEW: remove logic connected
+                              onPressed: () =>
+                                  removeProduct(index),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
         ),
       ),
     );
