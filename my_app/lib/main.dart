@@ -1,104 +1,152 @@
-// main() is where every Flutter app starts
-// MaterialApp is the root of the app
-// Scaffold gives us the basic page structure (appBar + body)
-// StatelessWidget — nothing changes yet, just a static screen
+// Padding — adds space around widgets
+// Column — stacks widgets vertically
+// Card — a nice container with a shadow
+// TextField — text input field
+// ElevatedButton — clickable button (button does nothing yet — that's okay!)
+// SizedBox — adds empty space between widgets
 
 
-
-
-// Import Flutter's Material Design library (UI components like Scaffold, AppBar, Text, etc.)
 import 'package:flutter/material.dart';
 
-// Entry point of every Flutter app
 void main() {
-  // runApp starts the Flutter app and takes a Widget as input
-  // 'const' is used because MyApp is immutable (optimization)
   runApp(const MyApp());
 }
 
-// MyApp is the root widget of the application
-// StatelessWidget means it does NOT manage any internal state: meaning after creation the appriance wont change
 class MyApp extends StatelessWidget {
-
-  // Constructor for MyApp
-  // super.key allows Flutter to optimize widget rebuilding
   const MyApp({super.key});
 
-  // build() describes how the UI should look
   @override
   Widget build(BuildContext context) {
-
-    // MaterialApp is the top-level widget for a Material Design app
     return MaterialApp(
-
-      // Title of the app (used in task switchers, not visible in UI directly)
       title: 'Product Inventory',
-
-      // Removes the "DEBUG" banner in the top-right corner
       debugShowCheckedModeBanner: false,
-
-      // Theme configuration for the whole app
       theme: ThemeData(
-
-        // Generates a color scheme based on a seed color (blue here)
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-
-        // Enables Material Design 3 (modern UI style)
         useMaterial3: true,
       ),
-
-      // The first screen that will be shown when the app starts
       home: const InventoryPage(),
     );
   }
 }
 
-// InventoryPage is another screen (widget)
-// Also Stateless → UI does not change dynamically
 class InventoryPage extends StatelessWidget {
-
-  // Constructor
   const InventoryPage({super.key});
 
   @override
   Widget build(BuildContext context) {
-
-    // Scaffold provides a basic app layout structure
     return Scaffold(
-
-      // Top bar of the app
       appBar: AppBar(
-
-        // Background color comes from the theme's primary color
         backgroundColor: Theme.of(context).colorScheme.primary,
-
-        // Title displayed in the AppBar
         title: const Text(
           'Product Inventory',
-
-          // Styling the text (white + bold)
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
-
-        // Centers the title in the AppBar
         centerTitle: true,
       ),
+      body: Padding(
+        // Adds space (16px) around the entire body content
+        padding: const EdgeInsets.all(16.0),
 
-      // Main body of the screen
-      body: const Center(
+        child: Column(
+          // Column arranges widgets vertically (top → bottom)
+          children: [
 
-        // Center widget places its child in the middle of the screen
-        child: Text(
-          'Welcome to Product Inventory!',
+            // ── The input card ───────────────────────────────────────
+            Card(
+              // elevation adds a shadow → gives a "raised" card effect
+              elevation: 3,
 
-          // Text styling
-          style: TextStyle(
-            fontSize: 20,
-            color: Colors.grey,
-          ),
+              child: Padding(
+                // inner spacing inside the card
+                padding: const EdgeInsets.all(16.0),
+
+                child: Column(
+                  // aligns children to the left instead of center
+                  crossAxisAlignment: CrossAxisAlignment.start,
+
+                  children: [
+                    const Text(
+                      'Add New Product',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+
+                    // Adds vertical spacing between elements
+                    const SizedBox(height: 12),
+
+                    // Product name field
+                    const TextField(
+                      // InputDecoration defines UI of the input field
+                      decoration: InputDecoration(
+                        labelText: 'Product Name',   // floating label
+                        hintText: 'e.g. Laptop',     // placeholder text
+                        border: OutlineInputBorder(), // visible border
+                        prefixIcon: Icon(Icons.inventory_2), // icon inside field
+                      ),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // Quantity field
+                    const TextField(
+                      // Forces numeric keyboard on mobile
+                      keyboardType: TextInputType.number,
+
+                      decoration: InputDecoration(
+                        labelText: 'Quantity',
+                        hintText: 'e.g. 10',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.numbers),
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // Add button — does nothing yet
+                    SizedBox(
+                      // Makes button take full width
+                      width: double.infinity,
+
+                      child: ElevatedButton.icon(
+                        // Click handler (currently empty → no logic yet)
+                        onPressed: () {},
+
+                        // Icon + text button (combined)
+                        icon: const Icon(Icons.add),
+
+                        label: const Text(
+                          'Add Product',
+                          style: TextStyle(fontSize: 16),
+                        ),
+
+                        // Custom styling for the button
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+
+                          // Uses theme color (keeps design consistent)
+                          backgroundColor:
+                              Theme.of(context).colorScheme.primary,
+
+                          // Text/icon color
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 40),
+
+            // Placeholder text for future feature (product list)
+            const Text(
+              'Product list will appear here...',
+              style: TextStyle(color: Colors.grey, fontSize: 16),
+           ),
+          ],
         ),
       ),
     );
