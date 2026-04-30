@@ -1,3 +1,11 @@
+// main() is where every Flutter app starts
+// MaterialApp is the root of the app
+// Scaffold gives us the basic page structure (appBar + body)
+// StatelessWidget — nothing changes yet, just a static screen
+
+
+
+
 // Import Flutter's Material Design library (UI components like Scaffold, AppBar, Text, etc.)
 import 'package:flutter/material.dart';
 
