@@ -1,4 +1,10 @@
-// Import Material UI components
+// Why we change from StatelessWidget to StatefulWidget
+// List<Map<String, String>> — storing products as a list
+// TextEditingController — reading what user typed
+// setState() — the magic that redraws the screen
+// ListView.builder — drawing one row per product
+// The ternary operator condition ? a : b — show empty state or the list
+
 import 'package:flutter/material.dart';
 
 // Entry point (unchanged)
