@@ -3,6 +3,24 @@ dependencies:
     sdk: flutter
   firebase_core: ^2.27.0
   firebase_auth: ^4.17.0
+
+# flutter pub get
+
+# firebase_auth_demo/lib/pages/auth_page.dart
+
+# add logout to the inventory page. Open lib/pages/inventory_page.dart and add a logout button to the AppBar:
+  centerTitle: true,
+  actions: [
+    IconButton(
+      icon: const Icon(Icons.logout, color: Colors.white),
+      onPressed: () => FirebaseAuth.instance.signOut(),
+    ),
+  ],
+  bottom: TabBar(
+...
+import 'package:firebase_auth/firebase_auth.dart';
+
+dependencies:
   cloud_firestore: ^4.15.0
 
 # flutter pub get
