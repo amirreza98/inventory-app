@@ -1,3 +1,13 @@
+dependencies:
+  flutter:
+    sdk: flutter
+  firebase_core: ^2.27.0
+  firebase_auth: ^4.17.0
+  cloud_firestore: ^4.15.0
+
+# flutter pub get
+
+
 # my_app
 
 A new Flutter project.
