@@ -3,6 +3,7 @@ import 'package:fl_chart/fl_chart.dart';
 import '../widgets/product_input_card.dart';
 import '../widgets/product_list_view.dart';
 import '../widgets/product_chart_view.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class InventoryPage extends StatefulWidget {
   const InventoryPage({super.key});
@@ -64,6 +65,12 @@ class _InventoryPageState extends State<InventoryPage> {
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
           ),
           centerTitle: true,
+          actions: [
+                IconButton(
+                icon: const Icon(Icons.logout, color: Colors.white),
+                onPressed: () => FirebaseAuth.instance.signOut(),
+                ),
+            ],
           bottom: TabBar(
             onTap: (index) => setState(() => selectedTab = index),
             tabs: const [
