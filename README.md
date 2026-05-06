@@ -1,3 +1,13 @@
+git checkout your-branch-name
+
+# Move my_app contents to root
+mv inventory-app/my_app/* .
+mv inventory-app/my_app/.* . 2>/dev/null  # hidden files like .gitignore, .metadata etc.
+# Stage everything
+git add -A
+git commit -m "fix: move Flutter project to repo root"
+git push origin your-branch-name
+
   firebase_core: ^2.27.0
   firebase_auth: ^4.17.0
 
