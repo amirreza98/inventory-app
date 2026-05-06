@@ -1,7 +1,11 @@
 dependencies:
+
   flutter:
+  
     sdk: flutter
+    
   firebase_core: ^2.27.0
+  
   firebase_auth: ^4.17.0
 
 # flutter pub get
