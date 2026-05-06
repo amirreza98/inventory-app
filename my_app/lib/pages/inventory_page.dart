@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../widgets/product_input_card.dart';
 import '../widgets/product_list_view.dart';
 import '../widgets/product_chart_view.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
 class InventoryPage extends StatefulWidget {
   const InventoryPage({super.key});
@@ -13,32 +14,30 @@ class InventoryPage extends StatefulWidget {
 }
 
 class _InventoryPageState extends State<InventoryPage> {
-  List<Map<String, String>> products = [];
   final TextEditingController nameController = TextEditingController();
   final TextEditingController quantityController = TextEditingController();
   int selectedTab = 0;
 
-  void addProduct() {
-    String name = nameController.text.trim();
-    String quantity = quantityController.text.trim();
+  final _collection = FirebaseFirestore.instance.collection('products');
+
+  Future<void> addProduct() async {
+    final name = nameController.text.trim();
+    final quantity = quantityController.text.trim();
     if (name.isEmpty || quantity.isEmpty) return;
-    setState(() {
-      products.add({'name': name, 'quantity': quantity});
-    });
+    await _collection.add({'name': name, 'quantity': quantity});
     nameController.clear();
     quantityController.clear();
   }
 
-  void removeProduct(int index) {
-    setState(() {
-      products.removeAt(index);
-    });
+  Future<void> removeProduct(String docId) async {
+    await _collection.doc(docId).delete();
   }
 
-  List<BarChartGroupData> buildBarGroups() {
-    return products.asMap().entries.map((entry) {
-      int index = entry.key;
-      double qty = double.tryParse(entry.value['quantity'] ?? '0') ?? 0;
+  List<BarChartGroupData> buildBarGroups(List<QueryDocumentSnapshot> docs) {
+    return docs.asMap().entries.map((entry) {
+      final index = entry.key;
+      final data = entry.value.data() as Map<String, dynamic>;
+      final qty = double.tryParse(data['quantity']?.toString() ?? '0') ?? 0;
       return BarChartGroupData(
         x: index,
         barRods: [
@@ -66,11 +65,11 @@ class _InventoryPageState extends State<InventoryPage> {
           ),
           centerTitle: true,
           actions: [
-                IconButton(
-                icon: const Icon(Icons.logout, color: Colors.white),
-                onPressed: () => FirebaseAuth.instance.signOut(),
-                ),
-            ],
+            IconButton(
+              icon: const Icon(Icons.logout, color: Colors.white),
+              onPressed: () => FirebaseAuth.instance.signOut(),
+            ),
+          ],
           bottom: TabBar(
             onTap: (index) => setState(() => selectedTab = index),
             tabs: const [
@@ -81,29 +80,47 @@ class _InventoryPageState extends State<InventoryPage> {
             labelColor: Colors.white,
           ),
         ),
-        body: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            children: [
-              ProductInputCard(
-                nameController: nameController,
-                quantityController: quantityController,
-                onAdd: addProduct,
+        body: StreamBuilder<QuerySnapshot>(
+          stream: _collection.snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            final docs = snapshot.data?.docs ?? [];
+            final products = docs
+                .map((d) => {
+                      'id': d.id,
+                      'name': (d.data() as Map<String, dynamic>)['name']?.toString() ?? '',
+                      'quantity': (d.data() as Map<String, dynamic>)['quantity']?.toString() ?? '0',
+                    })
+                .toList();
+
+            return Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                children: [
+                  ProductInputCard(
+                    nameController: nameController,
+                    quantityController: quantityController,
+                    onAdd: () => addProduct(),
+                  ),
+                  const SizedBox(height: 16),
+                  Expanded(
+                    child: selectedTab == 0
+                        ? ProductListView(
+                            products: products,
+                            onRemove: (index) => removeProduct(docs[index].id),
+                          )
+                        : ProductChartView(
+                            products: products,
+                            barGroups: buildBarGroups(docs),
+                          ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 16),
-              Expanded(
-                child: selectedTab == 0
-                    ? ProductListView(
-                        products: products,
-                        onRemove: removeProduct,
-                      )
-                    : ProductChartView(
-                        products: products,
-                        barGroups: buildBarGroups(),
-                      ),
-              ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
