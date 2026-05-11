@@ -1019,15 +1019,15 @@ class _InventoryPageState extends State<InventoryPage> {
 
 ---
 
-## Phase 2: Navigation & Data — Step-by-Step Build
+## Phase 2: Navigation & Data — Build
 
 ---
 
 ### Checkpoint 7 — Minimum Stock Level
 
 **Concepts:**
-- Data model evolution — Firestore has no schema, so adding a new field is safe. Existing documents simply won't have the field until they are edited.
-- Default values on read — When reading older documents that don't have `minStockLevel`, we fall back to `'0'` so the app never crashes.
+- Data model evolution, Firestore has no schema, so adding a new field is safe. Existing documents simply won't have the field until they are edited.
+- Default values on read, When reading older documents that don't have `minStockLevel`, we fall back to `'0'` so the app never crashes.
 
 **Update:** `lib/widgets/product_input_card.dart` — add `minStockLevelController` and a third `TextField`:
 
