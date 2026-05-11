@@ -1,19 +1,27 @@
 import 'package:flutter/material.dart';
 
+// ProductListView displays a scrollable list of product cards.
+// It is a StatelessWidget — it only displays data passed to it from InventoryPage.
 class ProductListView extends StatelessWidget {
-  final List<Map<String, String>> products;
-  final Function(int) onRemove;
+  // Map<String, dynamic> means the map keys are strings but values can be any type
+  // (strings, ints, etc.). We upgraded from Map<String, String> to support minStockLevel.
+  final List<Map<String, dynamic>> products;
+
+  // onTap is called when a product card is tapped.
+  // The parent (InventoryPage) decides what to do — in this case, navigate to the detail screen.
+  final Function(Map<String, dynamic>) onTap;
 
   const ProductListView({
     super.key,
     required this.products,
-    required this.onRemove,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
+        // Header row: title on the left, item count chip on the right
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -28,8 +36,11 @@ class ProductListView extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 10),
+
+        // Expanded tells the Column to give this widget all remaining vertical space
         Expanded(
           child: products.isEmpty
+              // Empty state: shown when there are no products in Firestore yet
               ? const Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -44,6 +55,7 @@ class ProductListView extends StatelessWidget {
                     ],
                   ),
                 )
+              // ListView.builder efficiently builds only the visible cards on screen
               : ListView.builder(
                   itemCount: products.length,
                   itemBuilder: (context, index) {
@@ -51,6 +63,11 @@ class ProductListView extends StatelessWidget {
                     return Card(
                       margin: const EdgeInsets.only(bottom: 8),
                       child: ListTile(
+                        // onTap makes the entire card tappable.
+                        // We pass the full product map so the detail screen gets all data.
+                        onTap: () => onTap(product),
+
+                        // Numbered avatar on the left
                         leading: CircleAvatar(
                           backgroundColor:
                               Theme.of(context).colorScheme.primaryContainer,
@@ -62,14 +79,19 @@ class ProductListView extends StatelessWidget {
                             ),
                           ),
                         ),
+
                         title: Text(
-                          product['name']!,
+                          product['name']?.toString() ?? '',
                           style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                         subtitle: Text('Quantity: ${product['quantity']}'),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.delete_outline, color: Colors.red),
-                          onPressed: () => onRemove(index),
+
+                        // Arrow icon hints to the user that this card is tappable.
+                        // The delete button has moved to the Product Detail screen.
+                        trailing: const Icon(
+                          Icons.arrow_forward_ios,
+                          size: 16,
+                          color: Colors.grey,
                         ),
                       ),
                     );
