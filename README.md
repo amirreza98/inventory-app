@@ -3459,17 +3459,17 @@ In Virtual Device Manager click the Play button ▶ next to your Pixel 7. Wait f
 
 Step 4 — Run your Flutter app on it
 In your terminal inside your project:
-bashflutter devices
+flutter devices
 You should see your emulator listed. Then:
-bashflutter run
+flutter run
 Flutter will automatically detect the running emulator and deploy to it.
 
 Common Android Problems & Fixes
 Problem: flutter doctor shows Android SDK not found
 macOS fix:
-bashflutter config --android-sdk ~/Library/Android/sdk
+flutter config --android-sdk ~/Library/Android/sdk
 Windows fix:
-bashflutter config --android-sdk C:\Users\YourName\AppData\Local\Android\Sdk
+flutter config --android-sdk C:\Users\YourName\AppData\Local\Android\Sdk
 
 Problem: Emulator is very slow
 Fix — Enable hardware acceleration:
@@ -3478,12 +3478,12 @@ Windows: Open Windows Features → enable Windows Hypervisor Platform and Virtua
 
 Problem: ANDROID_HOME not set
 macOS — add to ~/.zshrc:
-bashexport ANDROID_HOME=$HOME/Library/Android/sdk
+export ANDROID_HOME=$HOME/Library/Android/sdk
 export PATH=$PATH:$ANDROID_HOME/emulator
 export PATH=$PATH:$ANDROID_HOME/tools
 export PATH=$PATH:$ANDROID_HOME/platform-tools
 Then run:
-bashsource ~/.zshrc
+source ~/.zshrc
 Windows — add to System Environment Variables:
 ANDROID_HOME = C:\Users\YourName\AppData\Local\Android\Sdk
 Then add to PATH:
@@ -3541,11 +3541,7 @@ bashflutter clean
 flutter pub get
 flutter run
 
-QUICK COMPARISON TABLE
-Android Emulator macOSAndroid Emulator WindowsiOS Simulator macOSiOS Simulator WindowsAvailable✅✅✅❌ Not possibleSetup difficultyEasyMediumMedium—SpeedFastMediumFast—RequiresAndroid StudioAndroid Studio + HypervisorXcode—Best forAndroid testingAndroid testingiOS testing—
 
-RECOMMENDED FOR YOUR CLASS
-Tell your students:
-macOS students — use the iOS Simulator. It's faster and easier than Android on Mac.
-Windows students — use the Android Emulator. Make sure they enable Hypervisor Platform in Windows Features first.
-Everyone — if the emulator is too slow on their laptop, use flutter run -d chrome as a backup. It always works on any machine.
+The app is running on the emulator but Firebase is not configured for Android. The fix is simple — you need to run FlutterFire CLI again to add Android support:
+
+flutterfire configure

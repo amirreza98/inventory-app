@@ -1,1 +1,1 @@
-{"flutter":{"platforms":{"dart":{"lib/firebase_options.dart":{"projectId":"supply-inventory-1e5e2","configurations":{"web":"1:606963412513:web:118eff7b607a96a23b3d60"}}}}}}
+{"flutter":{"platforms":{"dart":{"lib/firebase_options.dart":{"projectId":"supply-inventory-1e5e2","configurations":{"android":"1:606963412513:android:727dd1ef67799cf53b3d60","web":"1:606963412513:web:118eff7b607a96a23b3d60"}}},"android":{"default":{"projectId":"supply-inventory-1e5e2","appId":"1:606963412513:android:727dd1ef67799cf53b3d60","fileOutput":"android/app/google-services.json"}}}}}
