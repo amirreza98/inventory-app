@@ -3414,12 +3414,1618 @@ class _PlaceholderPage extends StatelessWidget {
 
 ---
 
-## Phase 3 (Next)
+## Phase 3: Advanced Features — Step-by-Step Build
 
-- User-specific data with Firestore security rules
-- Low-stock alert badges on the bottom navigation bar
-- Search and filter on the Products tab
-- Push notifications for stock alerts
+> Every checkpoint below is a fully runnable app. After each one, run `flutter run` and verify what you see before moving to the next step.
+
+---
+
+### Checkpoint 15 — Automatic Alerts Tab
+
+**Concepts:**
+- Deriving state instead of storing it — The alerts in this tab are never saved to a separate Firestore collection. They are **computed on the fly** from the products collection every time a product document changes. Any product whose `quantity == 0` is out of stock; any product where `quantity > 0 AND quantity <= minStockLevel` is low stock. This approach is simpler, always consistent, and never goes stale.
+- `ChoiceChip` — A chip that behaves like a radio button. Set `selected: true` on the chip whose value matches the current filter. When the user taps any chip `onSelected` fires and you call `setState` to update the filter. Only one chip is ever selected at a time — controlled by comparing each chip's value with a single `_filter` string variable.
+- Left border decoration on a `Card` — A `Card` has no built-in colored border. You add one by placing a `Container` with a `BoxDecoration` inside the `Card`. `Border(left: BorderSide(color: ..., width: 5))` draws only the left edge, creating a colored stripe effect. `clipBehavior: Clip.hardEdge` on the `Card` clips the stripe to the card's rounded corners so it looks clean.
+- Tappable list cards — Wrapping a `Card`'s child in `InkWell` makes the whole card respond to taps with a ripple effect. Here tapping a card pushes `ProductDetailScreen` so the user can immediately edit the quantity and fix the problem.
+- `StreamBuilder` vs `FutureBuilder` — `FutureBuilder` makes **one** request and shows the result once — like downloading a photo. `StreamBuilder` stays connected and rebuilds every time the data changes — like watching a live video stream. Use `StreamBuilder` for Firestore collections that must update in real time.
+
+**Create:** `lib/pages/alerts_page.dart`
+
+```dart
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
+import 'product_detail_screen.dart';
+
+// _AlertItem is a helper that holds the parsed fields for one alert.
+// Alerts are not stored in Firestore — they are computed on the fly from
+// the products collection every time a product document changes.
+class _AlertItem {
+  final DocumentSnapshot doc;
+  final String name;
+  final int qty;
+  final int min;
+  final bool isOutOfStock; // true = qty == 0,  false = low stock
+
+  const _AlertItem({
+    required this.doc,
+    required this.name,
+    required this.qty,
+    required this.min,
+    required this.isOutOfStock,
+  });
+}
+
+// AlertsPage streams the products collection and automatically surfaces every
+// product that is either completely out of stock (qty == 0) or running low
+// (qty > 0 AND qty <= minStockLevel AND minStockLevel > 0).
+// There is no manual data entry — alerts appear and disappear as product
+// quantities change anywhere in the app.
+class AlertsPage extends StatefulWidget {
+  const AlertsPage({super.key});
+
+  @override
+  State<AlertsPage> createState() => _AlertsPageState();
+}
+
+class _AlertsPageState extends State<AlertsPage> {
+  // _filter controls which subset of alerts is shown
+  String _filter = 'all'; // 'all' | 'low_stock' | 'out_of_stock'
+
+  Color _stripeColor(bool isOutOfStock) =>
+      isOutOfStock ? Colors.red : Colors.amber;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        // ── Filter chip row ─────────────────────────────────────────────
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Row(
+            children: [
+              const Text(
+                'Show: ',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(width: 8),
+              ChoiceChip(
+                label: const Text('All'),
+                selected: _filter == 'all',
+                onSelected: (_) => setState(() => _filter = 'all'),
+              ),
+              const SizedBox(width: 8),
+              ChoiceChip(
+                label: const Text('Low Stock'),
+                selected: _filter == 'low_stock',
+                onSelected: (_) => setState(() => _filter = 'low_stock'),
+              ),
+              const SizedBox(width: 8),
+              ChoiceChip(
+                label: const Text('Out of Stock'),
+                selected: _filter == 'out_of_stock',
+                onSelected: (_) => setState(() => _filter = 'out_of_stock'),
+              ),
+            ],
+          ),
+        ),
+
+        // ── Live alerts list ────────────────────────────────────────────
+        // StreamBuilder streams the products collection — not a separate alerts
+        // collection. We derive the alerts from the product data in memory.
+        Expanded(
+          child: StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('products')
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              if (snapshot.hasError) {
+                return Center(
+                  child: Text(
+                    'Error: ${snapshot.error}',
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                );
+              }
+
+              // Compute alerts from product documents.
+              // Out of stock: qty == 0
+              // Low stock:    qty > 0 AND minStockLevel > 0 AND qty <= minStockLevel
+              final alerts = <_AlertItem>[];
+              for (final doc in snapshot.data?.docs ?? []) {
+                final data = doc.data() as Map<String, dynamic>;
+                final qty =
+                    int.tryParse(data['quantity']?.toString() ?? '0') ?? 0;
+                final min =
+                    int.tryParse(data['minStockLevel']?.toString() ?? '0') ?? 0;
+                final name = data['name']?.toString() ?? '';
+
+                if (qty == 0) {
+                  alerts.add(_AlertItem(
+                    doc: doc,
+                    name: name,
+                    qty: qty,
+                    min: min,
+                    isOutOfStock: true,
+                  ));
+                } else if (min > 0 && qty <= min) {
+                  alerts.add(_AlertItem(
+                    doc: doc,
+                    name: name,
+                    qty: qty,
+                    min: min,
+                    isOutOfStock: false,
+                  ));
+                }
+              }
+
+              // Apply filter in memory — no extra Firestore request needed
+              final filtered = switch (_filter) {
+                'low_stock' => alerts.where((a) => !a.isOutOfStock).toList(),
+                'out_of_stock' =>
+                  alerts.where((a) => a.isOutOfStock).toList(),
+                _ => alerts,
+              };
+
+              // ── Empty state ──
+              if (filtered.isEmpty) {
+                final message = switch (_filter) {
+                  'low_stock' => 'No low-stock products.',
+                  'out_of_stock' => 'No out-of-stock products.',
+                  _ => 'All products are well stocked.',
+                };
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.check_circle_outline,
+                        size: 64,
+                        color: Colors.green.shade400,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        message,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.grey, fontSize: 16),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
+              // ── Alert cards ──
+              return ListView.builder(
+                padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
+                itemCount: filtered.length,
+                itemBuilder: (context, index) {
+                  final alert = filtered[index];
+                  final color = _stripeColor(alert.isOutOfStock);
+
+                  return Card(
+                    margin: const EdgeInsets.only(top: 10),
+                    clipBehavior: Clip.hardEdge,
+                    child: InkWell(
+                      // Tap card to open the product detail screen so the
+                      // user can immediately edit the quantity to fix it.
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ProductDetailScreen(
+                            product: {
+                              'id': alert.doc.id,
+                              'name': alert.name,
+                              'quantity': alert.qty.toString(),
+                              'minStockLevel': alert.min.toString(),
+                            },
+                          ),
+                        ),
+                      ),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          border: Border(
+                            left: BorderSide(color: color, width: 5),
+                          ),
+                        ),
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          title: Text(
+                            alert.name,
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const SizedBox(height: 4),
+                              Text(
+                                alert.isOutOfStock
+                                    ? 'Stock: 0 — completely out of stock'
+                                    : 'Stock: ${alert.qty} (min: ${alert.min})',
+                              ),
+                              const SizedBox(height: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: color.withAlpha(38),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  alert.isOutOfStock ? 'OUT OF STOCK' : 'LOW STOCK',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: color,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          isThreeLine: true,
+                          trailing: const Icon(Icons.chevron_right),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+```
+
+**Update:** `lib/pages/main_shell.dart` — add the `alerts_page.dart` import and replace the Alerts placeholder with `AlertsPage()`. The `_PlaceholderPage` class is removed because all four tabs are now real pages:
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'dashboard_page.dart';
+import 'inventory_page.dart';
+import 'suppliers_page.dart';
+import 'profile_page.dart';
+import 'alerts_page.dart'; // <-- new import
+
+class MainShell extends StatefulWidget {
+  const MainShell({super.key});
+
+  @override
+  State<MainShell> createState() => _MainShellState();
+}
+
+class _MainShellState extends State<MainShell> {
+  int _currentIndex = 1; // 0 = Dashboard, 1 = Products, 2 = Suppliers, 3 = Alerts
+
+  @override
+  Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+    final email = user?.email ?? '';
+    final initial = email.isNotEmpty ? email[0].toUpperCase() : 'S';
+
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        leading: GestureDetector(
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const ProfilePage()),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(10.0),
+            child: CircleAvatar(
+              backgroundColor: Colors.blue.shade700,
+              child: Text(
+                initial,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+            ),
+          ),
+        ),
+        title: const Text(
+          'StockFlow',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+      ),
+      body: _buildPage(_currentIndex),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _currentIndex,
+        onDestinationSelected: (index) => setState(() => _currentIndex = index),
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.dashboard_outlined),
+            selectedIcon: Icon(Icons.dashboard),
+            label: 'Dashboard',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.inventory_2_outlined),
+            selectedIcon: Icon(Icons.inventory_2),
+            label: 'Products',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.factory_outlined),
+            selectedIcon: Icon(Icons.factory),
+            label: 'Suppliers',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.notifications_outlined),
+            selectedIcon: Icon(Icons.notifications),
+            label: 'Alerts',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPage(int index) {
+    switch (index) {
+      case 0:
+        return const DashboardPage();
+      case 1:
+        return const InventoryPage();
+      case 2:
+        return const SuppliersPage();
+      case 3:
+        return const AlertsPage(); // <-- was _PlaceholderPage
+      default:
+        return const InventoryPage();
+    }
+  }
+}
+```
+
+**Run the app — you should see:** Tap the Alerts tab → if all products are well stocked you see a green check-circle and "All products are well stocked." Go to the Products tab and set a product's quantity to 0 — instantly switch back to Alerts and a red-striped card appears for that product labelled "OUT OF STOCK". Set another product's quantity below its minimum stock level — an amber-striped card appears labelled "LOW STOCK". Tap any card → the ProductDetailScreen opens so you can edit the quantity immediately. Increase the quantity above the minimum and the low-stock card disappears on its own. Tap the "Low Stock" chip → only amber cards show. Tap "Out of Stock" → only red cards show. Tap "All" → both types return.
+
+---
+
+### Checkpoint 16 — QR Code Scanner
+
+**Concepts:**
+- Camera permissions — Before an app can access the camera the device asks the user for permission. On **Android**, `mobile_scanner` adds the `CAMERA` permission to `AndroidManifest.xml` automatically — nothing extra needed. On **iOS**, you must manually add a human-readable explanation to `ios/Runner/Info.plist`. Without it, iOS immediately crashes the app when it tries to open the camera.
+- `MobileScanner` — A widget that renders a live camera preview full-screen and continuously processes frames looking for barcodes. Drop it inside any layout widget and it fills the available space.
+- `BarcodeCapture` — The object passed to `onDetect` every time the camera sees a barcode. `capture.barcodes` is a list because multiple barcodes can appear in one frame. Each `Barcode` has a `rawValue` — the plain text encoded in the QR code.
+- Returning data from a screen — `Navigator.pop(context, value)` closes a screen **and** sends a value back to whoever opened it. The caller receives it with `final result = await Navigator.push(...)`. Think of it like a function call: push = call the function, pop = return a value.
+- QR code format — A QR code stores any plain text you encode into it. This app expects the format `Name,Quantity,MinStockLevel` (e.g. `Widget A,60,10`). After scanning, `result.split(',')` splits on the comma and each trimmed part fills one form field. A bare name with no commas still works — quantity and min stay empty.
+- Why not Chrome — `mobile_scanner` uses the native camera API of the device operating system. This only works on a real Android/iOS device or a native emulator. Chrome uses a different browser camera API that the package does not support. Always test the scanner on Android or iOS.
+
+First, add `mobile_scanner` to `pubspec.yaml` then run `flutter pub get`:
+
+```yaml
+dependencies:
+  flutter:
+    sdk: flutter
+  fl_chart: ^0.68.0
+  firebase_core: ^2.27.0
+  firebase_auth: ^4.17.0
+  cloud_firestore: ^4.15.0
+  http: ^1.2.0
+  mobile_scanner: ^5.0.0   # <-- add this line
+```
+
+```bash
+flutter pub get
+```
+
+**iOS only — add camera permission to `ios/Runner/Info.plist`.**
+
+Open `ios/Runner/Info.plist` in your editor and add these two lines anywhere inside the outermost `<dict>` block:
+
+```xml
+<key>NSCameraUsageDescription</key>
+<string>StockFlow needs camera access to scan product QR codes.</string>
+```
+
+> Android users skip this step — `mobile_scanner` already handles the Android camera permission internally.
+
+**Create:** `lib/pages/qr_scanner_page.dart`
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
+
+// QrScannerPage opens the device camera full-screen and reads QR codes.
+// Unlike the tab pages, this screen is opened with Navigator.push() — so it
+// has its own Scaffold and AppBar with a back button.
+// When a QR code is detected it closes this screen and passes the scanned
+// text back to InventoryPage via Navigator.pop(context, value).
+class QrScannerPage extends StatefulWidget {
+  const QrScannerPage({super.key});
+
+  @override
+  State<QrScannerPage> createState() => _QrScannerPageState();
+}
+
+class _QrScannerPageState extends State<QrScannerPage> {
+  // MobileScannerController drives the camera hardware.
+  // It exposes toggleTorch() and switchCamera() for the AppBar buttons.
+  final MobileScannerController _controller = MobileScannerController();
+
+  // _hasScanned prevents onDetect from firing multiple times for the same code.
+  // The camera runs at many frames per second — without this flag the app
+  // would try to navigate away multiple times in quick succession.
+  bool _hasScanned = false;
+
+  @override
+  void dispose() {
+    // Releasing the controller stops the camera and frees the hardware.
+    // Failing to do so keeps the camera running in the background.
+    _controller.dispose();
+    super.dispose();
+  }
+
+  // _onDetect is called every time the camera finds a barcode in a frame.
+  void _onDetect(BarcodeCapture capture) {
+    if (_hasScanned) return; // ignore repeated detections of the same code
+
+    final barcodes = capture.barcodes;
+    if (barcodes.isEmpty) return;
+
+    final rawValue = barcodes.first.rawValue;
+    if (rawValue == null || rawValue.isEmpty) return;
+
+    setState(() => _hasScanned = true);
+
+    // Navigator.pop(context, rawValue) does two things at once:
+    //   1. Closes this screen — same as tapping the back button
+    //   2. Returns rawValue to InventoryPage, which receives it as:
+    //      final result = await Navigator.push(...)
+    Navigator.pop(context, rawValue);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        iconTheme: const IconThemeData(color: Colors.white),
+        title: const Text(
+          'Scan QR Code',
+          style: TextStyle(color: Colors.white),
+        ),
+        actions: [
+          // Torch toggle — useful when scanning in a dim warehouse or storeroom
+          IconButton(
+            icon: const Icon(Icons.flashlight_on, color: Colors.white),
+            tooltip: 'Toggle torch',
+            onPressed: () => _controller.toggleTorch(),
+          ),
+          // Camera flip — swap between front and back camera
+          IconButton(
+            icon: const Icon(Icons.flip_camera_ios, color: Colors.white),
+            tooltip: 'Flip camera',
+            onPressed: () => _controller.switchCamera(),
+          ),
+        ],
+      ),
+      body: Stack(
+        children: [
+          // MobileScanner fills the body with a live camera preview.
+          // onDetect fires every time the camera spots a barcode.
+          MobileScanner(
+            controller: _controller,
+            onDetect: _onDetect,
+          ),
+
+          // White square overlay guides the user where to aim the camera
+          Center(
+            child: Container(
+              width: 240,
+              height: 240,
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.white, width: 3),
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+
+          // Hint text at the bottom
+          const Align(
+            alignment: Alignment.bottomCenter,
+            child: Padding(
+              padding: EdgeInsets.only(bottom: 48),
+              child: Text(
+                'Point the camera at a QR code',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+```
+
+**Update:** `lib/pages/inventory_page.dart` — import `QrScannerPage`, add `_scanQrCode()`, and wrap the body in a `Stack` with a `Positioned` QR button in the bottom-right corner:
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../widgets/product_input_card.dart';
+import '../widgets/product_list_view.dart';
+import 'product_detail_screen.dart';
+import 'qr_scanner_page.dart'; // <-- new import
+
+class InventoryPage extends StatefulWidget {
+  const InventoryPage({super.key});
+
+  @override
+  State<InventoryPage> createState() => _InventoryPageState();
+}
+
+class _InventoryPageState extends State<InventoryPage> {
+  final TextEditingController nameController = TextEditingController();
+  final TextEditingController quantityController = TextEditingController();
+  final TextEditingController minStockLevelController = TextEditingController();
+
+  final _collection = FirebaseFirestore.instance.collection('products');
+
+  @override
+  void dispose() {
+    nameController.dispose();
+    quantityController.dispose();
+    minStockLevelController.dispose();
+    super.dispose();
+  }
+
+  Future<void> addProduct() async {
+    final name = nameController.text.trim();
+    final quantity = quantityController.text.trim();
+    final minStock = minStockLevelController.text.trim().isEmpty
+        ? '0'
+        : minStockLevelController.text.trim();
+    if (name.isEmpty || quantity.isEmpty) return;
+    await _collection.add({
+      'name': name,
+      'quantity': quantity,
+      'minStockLevel': minStock,
+    });
+    nameController.clear();
+    quantityController.clear();
+    minStockLevelController.clear();
+  }
+
+  // _scanQrCode opens the scanner screen and waits for a result.
+  // await Navigator.push() pauses this function until QrScannerPage closes.
+  // Whatever QrScannerPage passed to Navigator.pop() comes back as 'result'.
+  Future<void> _scanQrCode() async {
+    final result = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (_) => const QrScannerPage()),
+    );
+
+    // result is null when the user pressed back without scanning.
+    // Expected QR format: "Name,Quantity,MinStockLevel" — e.g. "Widget A,60,10".
+    // A bare name with no commas still works; qty and min fields stay empty.
+    if (result != null && result.isNotEmpty) {
+      final parts = result.split(',');
+      setState(() {
+        nameController.text = parts[0].trim();
+        if (parts.length > 1) quantityController.text = parts[1].trim();
+        if (parts.length > 2) minStockLevelController.text = parts[2].trim();
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: _collection.snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final docs = snapshot.data?.docs ?? [];
+        final products = docs.map((d) {
+          final data = d.data() as Map<String, dynamic>;
+          return <String, dynamic>{
+            'id': d.id,
+            'name': data['name']?.toString() ?? '',
+            'quantity': data['quantity']?.toString() ?? '0',
+            'minStockLevel': data['minStockLevel']?.toString() ?? '0',
+          };
+        }).toList();
+
+        // Stack layers the QR FAB on top of the scrollable content.
+        // InventoryPage has no Scaffold (MainShell provides it), so we cannot
+        // use Scaffold.floatingActionButton. Stack + Positioned is the alternative.
+        return Stack(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                children: [
+                  ProductInputCard(
+                    nameController: nameController,
+                    quantityController: quantityController,
+                    minStockLevelController: minStockLevelController,
+                    onAdd: addProduct,
+                  ),
+                  const SizedBox(height: 16),
+                  Expanded(
+                    child: ProductListView(
+                      products: products,
+                      onTap: (product) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                ProductDetailScreen(product: product),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // QR scan button — positioned in the bottom-right corner
+            Positioned(
+              bottom: 16,
+              right: 16,
+              child: FloatingActionButton(
+                onPressed: _scanQrCode,
+                tooltip: 'Scan QR code',
+                child: const Icon(Icons.qr_code_scanner),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+```
+
+**Run the app — you should see:** A QR scanner FAB appears in the bottom-right corner of the Products tab. Tapping it on a real device or Android emulator opens the full-screen camera view with torch and flip-camera buttons in the AppBar. Point the camera at a QR code that encodes `Widget A,60,10` → the scanner closes and all three fields fill instantly: Product Name = "Widget A", Quantity = "60", Min Stock Level = "10". Point the camera at a QR code that encodes just a name (no commas) → only the Product Name field fills; the other two stay empty. On Chrome, the button appears but the camera will not open — use Android or iOS for this feature.
+
+---
+
+### Checkpoint 17 — Live Badges on Navigation Bar
+
+**Concepts:**
+- `Badge` widget — A built-in Material 3 widget that overlays a small colored label on top of another widget. Think of the red notification count on a phone app icon. `label` is the text inside the badge (usually a number). `isLabelVisible: false` hides the badge completely — use this to avoid showing a "0" when the count is zero.
+- Nesting a `StreamBuilder` inside `build` — You can put a `StreamBuilder` anywhere inside a widget's `build` method, including inside a `StatefulWidget`. Flutter treats it like any other widget: it subscribes to the stream when the widget is inserted into the tree and unsubscribes when removed. The `StreamBuilder` rebuilds only its own subtree, not the whole page.
+- Why compute badge counts in `MainShell` — `MainShell` owns the `NavigationBar`. Computing counts here means both badges stay live and accurate no matter which tab is currently active.
+- Two counts from one stream — A single `StreamBuilder` on the products collection computes both numbers in one loop: `lowStockCount` (qty > 0 AND qty ≤ min, shown on the Products tab) and `alertCount` (qty == 0 OR qty ≤ min, shown on the Alerts tab). There is no need for a second stream or a second `StreamBuilder`.
+
+**Update:** `lib/pages/main_shell.dart` — add the `cloud_firestore` import, wrap `NavigationBar` in a `StreamBuilder`, compute both badge counts from one loop, and apply `Badge` to both the Products and Alerts icons:
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // <-- new import
+import 'package:firebase_auth/firebase_auth.dart';
+import 'dashboard_page.dart';
+import 'inventory_page.dart';
+import 'suppliers_page.dart';
+import 'profile_page.dart';
+import 'alerts_page.dart';
+
+// MainShell now also listens to the products collection to compute the
+// low-stock badge count shown on the Products tab icon in real time.
+class MainShell extends StatefulWidget {
+  const MainShell({super.key});
+
+  @override
+  State<MainShell> createState() => _MainShellState();
+}
+
+class _MainShellState extends State<MainShell> {
+  // 0 = Dashboard, 1 = Products, 2 = Suppliers, 3 = Alerts
+  int _currentIndex = 1;
+
+  @override
+  Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+    final email = user?.email ?? '';
+    final initial = email.isNotEmpty ? email[0].toUpperCase() : 'S';
+
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        leading: GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ProfilePage()),
+            );
+          },
+          child: Padding(
+            padding: const EdgeInsets.all(10.0),
+            child: CircleAvatar(
+              backgroundColor: Colors.blue.shade700,
+              child: Text(
+                initial,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+            ),
+          ),
+        ),
+        title: const Text(
+          'StockFlow',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+      ),
+      body: _buildPage(_currentIndex),
+
+      // StreamBuilder wraps the NavigationBar so both badge counts update
+      // automatically whenever any product document changes in Firestore.
+      bottomNavigationBar: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance.collection('products').snapshots(),
+        builder: (context, snapshot) {
+          // lowStockCount — qty > 0 AND qty <= min (warning state, badge on Products)
+          // alertCount    — qty == 0 OR (min > 0 AND qty <= min) (badge on Alerts)
+          int lowStockCount = 0;
+          int alertCount = 0;
+          if (snapshot.hasData) {
+            for (final doc in snapshot.data!.docs) {
+              final data = doc.data() as Map<String, dynamic>;
+              final qty =
+                  int.tryParse(data['quantity']?.toString() ?? '0') ?? 0;
+              final min =
+                  int.tryParse(data['minStockLevel']?.toString() ?? '0') ?? 0;
+              if (qty > 0 && qty <= min) lowStockCount++;
+              if (qty == 0 || (min > 0 && qty <= min)) alertCount++;
+            }
+          }
+
+          return NavigationBar(
+            selectedIndex: _currentIndex,
+            onDestinationSelected: (index) =>
+                setState(() => _currentIndex = index),
+            destinations: [
+              const NavigationDestination(
+                icon: Icon(Icons.dashboard_outlined),
+                selectedIcon: Icon(Icons.dashboard),
+                label: 'Dashboard',
+              ),
+              // Products badge — shows the count of low-stock (warning) items.
+              // isLabelVisible: false hides it when the count is zero.
+              NavigationDestination(
+                icon: Badge(
+                  label: Text('$lowStockCount'),
+                  isLabelVisible: lowStockCount > 0,
+                  child: const Icon(Icons.inventory_2_outlined),
+                ),
+                selectedIcon: Badge(
+                  label: Text('$lowStockCount'),
+                  isLabelVisible: lowStockCount > 0,
+                  child: const Icon(Icons.inventory_2),
+                ),
+                label: 'Products',
+              ),
+              const NavigationDestination(
+                icon: Icon(Icons.factory_outlined),
+                selectedIcon: Icon(Icons.factory),
+                label: 'Suppliers',
+              ),
+              // Alerts badge — shows the total count of all stock problems
+              // (both low stock and completely out of stock).
+              NavigationDestination(
+                icon: Badge(
+                  label: Text('$alertCount'),
+                  isLabelVisible: alertCount > 0,
+                  child: const Icon(Icons.notifications_outlined),
+                ),
+                selectedIcon: Badge(
+                  label: Text('$alertCount'),
+                  isLabelVisible: alertCount > 0,
+                  child: const Icon(Icons.notifications),
+                ),
+                label: 'Alerts',
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  // _buildPage returns the correct page widget for the selected tab index
+  Widget _buildPage(int index) {
+    switch (index) {
+      case 0:
+        return const DashboardPage();
+      case 1:
+        return const InventoryPage();
+      case 2:
+        return const SuppliersPage();
+      case 3:
+        return const AlertsPage();
+      default:
+        return const InventoryPage();
+    }
+  }
+}
+```
+
+**Run the app — you should see:** Add a product with quantity below its minimum (e.g. quantity = 2, min = 5) — a badge appears on the Products icon in the navigation bar. Set a different product's quantity to 0 — a badge also appears on the Alerts icon counting that product. The Products badge counts only low-stock items (qty > 0 and qty ≤ min); the Alerts badge counts all stock problems including out-of-stock. Edit a product's quantity back above its minimum and that product disappears from the badge counts instantly. When all products are healthy both badges hide completely. The counts stay accurate no matter which tab you are on.
+
+---
+
+### Checkpoint 18 — CSV Import
+
+**Concepts:**
+- `FilePicker` — A cross-platform package that opens the native file picker dialog (Finder on macOS, Files on Android/iOS, Explorer on Windows). `pickFiles(type: FileType.custom, allowedExtensions: ['csv'], withData: true)` limits the picker to CSV files and loads the file's raw bytes into memory so you can process them immediately without reading a file path.
+- `utf8.decode(bytes)` — Converts the raw `Uint8List` bytes returned by `FilePicker` into a Dart `String`. UTF-8 is the standard encoding for CSV files. This is a built-in Dart function — no extra package needed.
+- Parsing CSV in pure Dart — A CSV file is plain text where each line is a row and each field is separated by a comma. The tricky part is **quoted fields**: a field like `"Smith, John"` contains a comma but should stay as one field. You handle this by scanning character by character, toggling an `inQuotes` flag when you hit a `"`, and only splitting on `,` when `inQuotes` is `false`. Two consecutive `""` inside a quoted field represent a literal double-quote character.
+- Firestore update vs add — When you import a product that already exists (matched by name), you call `.update({...})` on the existing document. When it is brand new you call `.add({...})`. A single Firestore `.get()` before the import loop builds a name→docId lookup map so you only hit the network once.
+- Preview screen before committing — Rather than writing to Firestore immediately when the file is picked, you push a new screen that shows every parsed row. The user can uncheck rows to skip them, edit the Qty and Min fields inline, and only tap Confirm when they are satisfied. This prevents bad data from silently entering the database.
+
+First, make sure `file_picker` is in `pubspec.yaml` (it should already be there from Checkpoint 16), then run `flutter pub get`:
+
+```yaml
+dependencies:
+  flutter:
+    sdk: flutter
+  fl_chart: ^0.68.0
+  firebase_core: ^2.27.0
+  firebase_auth: ^4.17.0
+  cloud_firestore: ^4.15.0
+  http: ^1.2.0
+  mobile_scanner: ^5.0.0
+  file_picker: ^8.0.0   # <-- add this line if not already present
+```
+
+```bash
+flutter pub get
+```
+
+**Create:** `lib/pages/csv_import_page.dart`
+
+```dart
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
+
+// _ImportRow holds everything for one product row in the preview list.
+// Each row starts selected and pre-filled from the CSV file.
+// The user can uncheck it, or edit the Qty / Min fields before confirming.
+class _ImportRow {
+  final String name;
+  final TextEditingController qtyController;
+  final TextEditingController minController;
+  bool selected = true;
+
+  // null  →  this is a brand-new product (will be created in Firestore)
+  // non-null → this product already exists (will be updated by docId)
+  String? existingDocId;
+
+  _ImportRow({
+    required this.name,
+    required String quantity,
+    required String minStockLevel,
+  })  : qtyController = TextEditingController(text: quantity),
+        minController = TextEditingController(text: minStockLevel);
+
+  void dispose() {
+    qtyController.dispose();
+    minController.dispose();
+  }
+}
+
+// CsvImportPage is a full-screen preview before committing any changes.
+// It receives the raw text content of the chosen CSV file, parses it,
+// checks Firestore for existing products, then lets the user:
+//   • uncheck rows to skip them
+//   • edit the Qty / Min fields inline
+//   • tap "Import N Products" to write everything to Firestore
+class CsvImportPage extends StatefulWidget {
+  final String csvContent;
+
+  const CsvImportPage({super.key, required this.csvContent});
+
+  @override
+  State<CsvImportPage> createState() => _CsvImportPageState();
+}
+
+class _CsvImportPageState extends State<CsvImportPage> {
+  List<_ImportRow> _rows = [];
+  bool _isLoading = true;   // true while parsing + querying Firestore
+  bool _isImporting = false; // true while writing to Firestore
+  String? _parseError;      // non-null when the file could not be parsed
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  @override
+  void dispose() {
+    for (final row in _rows) {
+      row.dispose();
+    }
+    super.dispose();
+  }
+
+  // _loadData does two async steps back-to-back:
+  //   1. Parse the CSV text into _ImportRow list
+  //   2. One Firestore read to find which products already exist
+  Future<void> _loadData() async {
+    try {
+      final parsed = _parseCsv(widget.csvContent);
+
+      if (parsed.isEmpty) {
+        setState(() {
+          _parseError =
+              'No products found in the file.\n\n'
+              'Expected column layout (row 1 = header, data from row 2):\n'
+              '  Column A  →  Product Name\n'
+              '  Column B  →  Quantity\n'
+              '  Column C  →  Min Stock Level (optional)';
+          _isLoading = false;
+        });
+        return;
+      }
+
+      // Single Firestore read — load every existing product once
+      final snapshot =
+          await FirebaseFirestore.instance.collection('products').get();
+
+      // Build a lookup map: lowercased name → Firestore document ID
+      final existing = <String, String>{};
+      for (final doc in snapshot.docs) {
+        final name =
+            (doc.data()['name']?.toString().trim() ?? '').toLowerCase();
+        if (name.isNotEmpty) existing[name] = doc.id;
+      }
+
+      // Tag each parsed row as NEW or UPDATE
+      for (final row in parsed) {
+        row.existingDocId = existing[row.name.toLowerCase()];
+      }
+
+      setState(() {
+        _rows = parsed;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _parseError = 'Could not read the file.\n\nDetails: $e';
+        _isLoading = false;
+      });
+    }
+  }
+
+  // _parseCsv splits the CSV text into rows, skipping the header (row 0).
+  // It handles quoted fields that may contain commas or newlines.
+  List<_ImportRow> _parseCsv(String content) {
+    // Normalize line endings so both \r\n and \n work
+    final lines = content
+        .replaceAll('\r\n', '\n')
+        .replaceAll('\r', '\n')
+        .split('\n');
+
+    if (lines.length < 2) return [];
+
+    final result = <_ImportRow>[];
+
+    // Start from index 1 to skip the header row
+    for (int i = 1; i < lines.length; i++) {
+      final line = lines[i].trim();
+      if (line.isEmpty) continue;
+
+      final cols = _splitLine(line);
+
+      final name = cols.isNotEmpty ? cols[0].trim() : '';
+      if (name.isEmpty) continue;
+
+      // Column B: quantity (default '0' when absent or empty)
+      final qty = (cols.length > 1 && cols[1].trim().isNotEmpty)
+          ? cols[1].trim()
+          : '0';
+
+      // Column C: min stock level (default '0' when absent or empty)
+      final min = (cols.length > 2 && cols[2].trim().isNotEmpty)
+          ? cols[2].trim()
+          : '0';
+
+      result.add(_ImportRow(name: name, quantity: qty, minStockLevel: min));
+    }
+
+    return result;
+  }
+
+  // _splitLine splits one CSV line into fields.
+  // Handles quoted fields: "hello, world" stays as one field.
+  List<String> _splitLine(String line) {
+    final fields = <String>[];
+    final buffer = StringBuffer();
+    bool inQuotes = false;
+
+    for (int i = 0; i < line.length; i++) {
+      final ch = line[i];
+
+      if (ch == '"') {
+        // Two consecutive double-quotes inside a quoted field = literal "
+        if (inQuotes && i + 1 < line.length && line[i + 1] == '"') {
+          buffer.write('"');
+          i++; // skip next quote
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (ch == ',' && !inQuotes) {
+        fields.add(buffer.toString());
+        buffer.clear();
+      } else {
+        buffer.write(ch);
+      }
+    }
+
+    fields.add(buffer.toString()); // last field
+    return fields;
+  }
+
+  // _confirmImport writes every checked row to Firestore.
+  // If the product already exists it calls .update(); otherwise .add().
+  Future<void> _confirmImport() async {
+    final toImport = _rows.where((r) => r.selected).toList();
+    if (toImport.isEmpty) return;
+
+    setState(() => _isImporting = true);
+
+    final col = FirebaseFirestore.instance.collection('products');
+
+    try {
+      for (final row in toImport) {
+        final qty = row.qtyController.text.trim().isEmpty
+            ? '0'
+            : row.qtyController.text.trim();
+        final min = row.minController.text.trim().isEmpty
+            ? '0'
+            : row.minController.text.trim();
+
+        if (row.existingDocId != null) {
+          // Product already exists — update quantity and minStockLevel
+          await col.doc(row.existingDocId).update({
+            'quantity': qty,
+            'minStockLevel': min,
+          });
+        } else {
+          // Brand-new product — create a Firestore document
+          await col.add({
+            'name': row.name,
+            'quantity': qty,
+            'minStockLevel': min,
+          });
+        }
+      }
+
+      // Pop back to InventoryPage — the StreamBuilder there will auto-refresh
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      setState(() => _isImporting = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Import failed: $e')),
+        );
+      }
+    }
+  }
+
+  // ── Helpers for the select-all checkbox ──────────────────────────────
+
+  int get _selectedCount => _rows.where((r) => r.selected).length;
+  bool get _allSelected => _rows.isNotEmpty && _rows.every((r) => r.selected);
+  bool get _noneSelected => _rows.every((r) => !r.selected);
+
+  void _toggleAll(bool? value) {
+    setState(() {
+      for (final row in _rows) {
+        row.selected = value ?? false;
+      }
+    });
+  }
+
+  // ── Build ─────────────────────────────────────────────────────────────
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        iconTheme: const IconThemeData(color: Colors.white),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Import Products',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+              ),
+            ),
+            // Show "X of Y selected" subtitle once loading is done
+            if (!_isLoading && _parseError == null)
+              Text(
+                '$_selectedCount of ${_rows.length} selected',
+                style: const TextStyle(color: Colors.white70, fontSize: 12),
+              ),
+          ],
+        ),
+      ),
+      body: _buildBody(),
+      bottomNavigationBar: _buildBottomBar(),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Reading file and checking existing products…'),
+          ],
+        ),
+      );
+    }
+
+    if (_parseError != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, size: 64, color: Colors.red),
+              const SizedBox(height: 16),
+              Text(
+                _parseError!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 14, color: Colors.red),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        // Header row with column labels and a select-all checkbox
+        Container(
+          color: Colors.grey.shade100,
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          child: Row(
+            children: [
+              // Tristate: checked = all selected, null = some, false = none
+              Checkbox(
+                value: _noneSelected ? false : (_allSelected ? true : null),
+                tristate: true,
+                onChanged: _toggleAll,
+              ),
+              const Expanded(
+                flex: 3,
+                child: Text(
+                  'Product Name',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                ),
+              ),
+              const SizedBox(
+                width: 60,
+                child: Text(
+                  'Qty',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                ),
+              ),
+              const SizedBox(width: 4),
+              const SizedBox(
+                width: 60,
+                child: Text(
+                  'Min',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                ),
+              ),
+              const SizedBox(width: 4),
+              const SizedBox(
+                width: 58,
+                child: Text(
+                  'Status',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
+
+        // Scrollable list of product rows
+        Expanded(
+          child: ListView.separated(
+            itemCount: _rows.length,
+            separatorBuilder: (context, index) =>
+                const Divider(height: 1, indent: 16),
+            itemBuilder: (context, i) => _buildRow(_rows[i]),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRow(_ImportRow row) {
+    final isUpdate = row.existingDocId != null;
+
+    return Container(
+      color: row.selected ? null : Colors.grey.shade50,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Checkbox(
+            value: row.selected,
+            onChanged: (v) => setState(() => row.selected = v ?? false),
+          ),
+          Expanded(
+            flex: 3,
+            child: Text(
+              row.name,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+                color: row.selected ? null : Colors.grey,
+              ),
+            ),
+          ),
+          SizedBox(
+            width: 60,
+            child: TextField(
+              controller: row.qtyController,
+              keyboardType: TextInputType.number,
+              textAlign: TextAlign.center,
+              enabled: row.selected,
+              style: const TextStyle(fontSize: 13),
+              decoration: InputDecoration(
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 4, vertical: 8),
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(6)),
+                filled: !row.selected,
+                fillColor: Colors.grey.shade100,
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+          SizedBox(
+            width: 60,
+            child: TextField(
+              controller: row.minController,
+              keyboardType: TextInputType.number,
+              textAlign: TextAlign.center,
+              enabled: row.selected,
+              style: const TextStyle(fontSize: 13),
+              decoration: InputDecoration(
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 4, vertical: 8),
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(6)),
+                filled: !row.selected,
+                fillColor: Colors.grey.shade100,
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+          SizedBox(
+            width: 58,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+              decoration: BoxDecoration(
+                color: isUpdate ? Colors.blue.shade50 : Colors.green.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: isUpdate
+                      ? Colors.blue.shade300
+                      : Colors.green.shade400,
+                ),
+              ),
+              child: Text(
+                isUpdate ? 'UPDATE' : 'NEW',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: isUpdate
+                      ? Colors.blue.shade700
+                      : Colors.green.shade700,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget? _buildBottomBar() {
+    if (_isLoading || _parseError != null) return null;
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+        child: SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed:
+                (_selectedCount == 0 || _isImporting) ? null : _confirmImport,
+            icon: _isImporting
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white),
+                  )
+                : const Icon(Icons.check_circle_outline),
+            label: Text(
+              _isImporting
+                  ? 'Importing…'
+                  : 'Import $_selectedCount '
+                      'Product${_selectedCount == 1 ? '' : 's'}',
+              style: const TextStyle(fontSize: 16),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+```
+
+**Update:** `lib/pages/inventory_page.dart` — add the `dart:convert` import, swap the Excel import for `csv_import_page.dart`, and add the `_importFromCsv` method with its FAB:
+
+```dart
+import 'dart:convert';                          // <-- new import
+
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../widgets/product_input_card.dart';
+import '../widgets/product_list_view.dart';
+import 'product_detail_screen.dart';
+import 'qr_scanner_page.dart';
+import 'csv_import_page.dart';                  // <-- was excel_import_page.dart
+
+class InventoryPage extends StatefulWidget {
+  const InventoryPage({super.key});
+
+  @override
+  State<InventoryPage> createState() => _InventoryPageState();
+}
+
+class _InventoryPageState extends State<InventoryPage> {
+  final TextEditingController nameController = TextEditingController();
+  final TextEditingController quantityController = TextEditingController();
+  final TextEditingController minStockLevelController = TextEditingController();
+
+  final _collection = FirebaseFirestore.instance.collection('products');
+
+  @override
+  void dispose() {
+    nameController.dispose();
+    quantityController.dispose();
+    minStockLevelController.dispose();
+    super.dispose();
+  }
+
+  Future<void> addProduct() async {
+    final name = nameController.text.trim();
+    final quantity = quantityController.text.trim();
+    final minStock = minStockLevelController.text.trim().isEmpty
+        ? '0'
+        : minStockLevelController.text.trim();
+    if (name.isEmpty || quantity.isEmpty) return;
+    await _collection.add({
+      'name': name,
+      'quantity': quantity,
+      'minStockLevel': minStock,
+    });
+    nameController.clear();
+    quantityController.clear();
+    minStockLevelController.clear();
+  }
+
+  Future<void> _scanQrCode() async {
+    final result = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (_) => const QrScannerPage()),
+    );
+    if (result != null && result.isNotEmpty) {
+      final parts = result.split(',');
+      setState(() {
+        nameController.text = parts[0].trim();
+        if (parts.length > 1) quantityController.text = parts[1].trim();
+        if (parts.length > 2) minStockLevelController.text = parts[2].trim();
+      });
+    }
+  }
+
+  // _importFromCsv opens the system file picker, reads the chosen .csv file,
+  // and pushes CsvImportPage where the user reviews rows before confirming.
+  Future<void> _importFromCsv() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['csv'],
+      withData: true, // loads file bytes into memory
+    );
+
+    if (result == null || result.files.isEmpty) return;
+
+    final bytes = result.files.first.bytes;
+    if (bytes == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not read the file. Try again.')),
+        );
+      }
+      return;
+    }
+
+    if (!mounted) return;
+
+    // Decode the raw bytes to a UTF-8 string and push the preview screen
+    final content = utf8.decode(bytes);
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CsvImportPage(csvContent: content),
+      ),
+    );
+    // When CsvImportPage pops, the StreamBuilder below auto-refreshes the list
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: _collection.snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final docs = snapshot.data?.docs ?? [];
+        final products = docs.map((d) {
+          final data = d.data() as Map<String, dynamic>;
+          return <String, dynamic>{
+            'id': d.id,
+            'name': data['name']?.toString() ?? '',
+            'quantity': data['quantity']?.toString() ?? '0',
+            'minStockLevel': data['minStockLevel']?.toString() ?? '0',
+          };
+        }).toList();
+
+        return Stack(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                children: [
+                  ProductInputCard(
+                    nameController: nameController,
+                    quantityController: quantityController,
+                    minStockLevelController: minStockLevelController,
+                    onAdd: addProduct,
+                  ),
+                  const SizedBox(height: 16),
+                  Expanded(
+                    child: ProductListView(
+                      products: products,
+                      onTap: (product) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                ProductDetailScreen(product: product),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Two FABs stacked vertically in the bottom-right corner.
+            // heroTag must be unique when multiple FABs share the same tree.
+            Positioned(
+              bottom: 16,
+              right: 16,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  // Small FAB: CSV import (above the main QR FAB)
+                  FloatingActionButton.small(
+                    heroTag: 'csv_import',
+                    onPressed: _importFromCsv,
+                    tooltip: 'Import from CSV',
+                    child: const Icon(Icons.upload_file),
+                  ),
+                  const SizedBox(height: 10),
+                  // Main FAB: QR scanner
+                  FloatingActionButton(
+                    heroTag: 'qr_scan',
+                    onPressed: _scanQrCode,
+                    tooltip: 'Scan QR code',
+                    child: const Icon(Icons.qr_code_scanner),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+```
+
+Your CSV file must follow this layout (row 1 is always the header and is skipped):
+
+```
+Name,Quantity,MinStockLevel
+Widget A,50,10
+Widget B,20,5
+"Bolt, M6",100,25
+```
+
+> Quoted fields work: `"Bolt, M6"` is treated as one product name even though it contains a comma.
+
+**Run the app — you should see:** Go to the Products tab and tap the small upload FAB (above the QR scanner button) in the bottom-right corner. The native file picker opens filtered to `.csv` files only. Pick a CSV file — a new full-screen "Import Products" preview screen appears. Every row from the file is shown with a checkbox, an editable Qty field, an editable Min field, and a green "NEW" or blue "UPDATE" badge (products whose names already exist in Firestore get "UPDATE"). Uncheck a row to skip it; the name dims and both fields become non-editable. The AppBar subtitle shows "X of Y selected" live as you toggle rows. Tap the tristate checkbox in the header to select or deselect all rows at once. Edit any Qty or Min value directly in the row. Tap "Import N Products" — a spinner appears while Firestore writes, then the screen closes and the product list refreshes automatically. Products with matching names are updated; new names are created as new documents.
+
+---
+
+## Checkpoint Summary — Phase 3
+
+| # | Files touched | What students see |
+|---|--------------|-------------------|
+| 15 | `pages/alerts_page.dart`, `pages/main_shell.dart` | Alerts tab that auto-generates red/amber cards from the products collection — no manual entry; tapping a card opens the product for editing; ChoiceChip filter row (All / Low Stock / Out of Stock) |
+| 16 | `pubspec.yaml`, `pages/qr_scanner_page.dart`, `pages/inventory_page.dart` | Full-screen QR scanner camera; scanning `Name,Qty,Min` auto-fills all three product fields at once |
+| 17 | `pages/main_shell.dart` | Live badge on Products icon (low-stock count) and live badge on Alerts icon (total stock-problem count), both driven by a single StreamBuilder |
+| 18 | `pubspec.yaml`, `pages/csv_import_page.dart`, `pages/inventory_page.dart` | CSV file picker → preview screen with per-row checkboxes, editable Qty/Min fields, and NEW/UPDATE badges; confirms to Firestore in one batch |
+
+---
+
+## Phase 4 (Next)
+
+- **Push notifications with FCM** — send a message to the user's device when stock drops below the minimum level using Firebase Cloud Messaging
+- **Automatic alert generation** — write a Cloud Function that triggers whenever a Firestore product document is updated and automatically creates an alert document when `quantity <= minStockLevel`
+- **Firestore security rules** — replace test-mode open access with production-ready rules so each user can only read and write their own documents
 
 
 Flutter Emulator Setup Guide

@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dashboard_page.dart';
 import 'inventory_page.dart';
 import 'suppliers_page.dart';
 import 'profile_page.dart';
+import 'alerts_page.dart';
 
-// MainShell is the top-level screen shown after the user logs in.
-// It owns the AppBar and the bottom NavigationBar that all tabs share.
-// Each tab renders a different page in the body.
+// MainShell is the top-level screen shown after login.
+// It owns the AppBar, the bottom NavigationBar, and the low-stock badge count.
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
 
@@ -16,14 +17,11 @@ class MainShell extends StatefulWidget {
 }
 
 class _MainShellState extends State<MainShell> {
-  // _currentIndex tracks which bottom tab the user has selected.
   // 0 = Dashboard, 1 = Products, 2 = Suppliers, 3 = Alerts
   int _currentIndex = 1;
 
   @override
   Widget build(BuildContext context) {
-    // Read the logged-in user's email to build the avatar initial dynamically.
-    // currentUser is never null here — MainShell is only shown when logged in.
     final user = FirebaseAuth.instance.currentUser;
     final email = user?.email ?? '';
     final initial = email.isNotEmpty ? email[0].toUpperCase() : 'S';
@@ -31,9 +29,7 @@ class _MainShellState extends State<MainShell> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.primary,
-
-        // GestureDetector wraps the avatar so tapping it opens the Profile page.
-        // Navigator.push() slides ProfilePage in from the right.
+        // Tapping the avatar opens the Profile page
         leading: GestureDetector(
           onTap: () {
             Navigator.push(
@@ -56,47 +52,84 @@ class _MainShellState extends State<MainShell> {
             ),
           ),
         ),
-
         title: const Text(
           'StockFlow',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
       ),
-
-      // The body shows a different widget depending on which tab is selected
       body: _buildPage(_currentIndex),
 
-      // NavigationBar is the Material 3 bottom navigation component
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _currentIndex,
-        onDestinationSelected: (index) => setState(() => _currentIndex = index),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.dashboard_outlined),
-            selectedIcon: Icon(Icons.dashboard),
-            label: 'Dashboard',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.inventory_2_outlined),
-            selectedIcon: Icon(Icons.inventory_2),
-            label: 'Products',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.factory_outlined),
-            selectedIcon: Icon(Icons.factory),
-            label: 'Suppliers',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.notifications_outlined),
-            selectedIcon: Icon(Icons.notifications),
-            label: 'Alerts',
-          ),
-        ],
+      // StreamBuilder wraps the NavigationBar so the Products badge count
+      // updates in real time whenever any product document changes in Firestore.
+      bottomNavigationBar: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance.collection('products').snapshots(),
+        builder: (context, snapshot) {
+          // lowStockCount  — qty > 0 AND qty <= min (warning state, badge on Products)
+          // alertCount     — qty == 0 OR (min > 0 AND qty <= min) (badge on Alerts)
+          int lowStockCount = 0;
+          int alertCount = 0;
+          if (snapshot.hasData) {
+            for (final doc in snapshot.data!.docs) {
+              final data = doc.data() as Map<String, dynamic>;
+              final qty =
+                  int.tryParse(data['quantity']?.toString() ?? '0') ?? 0;
+              final min =
+                  int.tryParse(data['minStockLevel']?.toString() ?? '0') ?? 0;
+              if (qty > 0 && qty <= min) lowStockCount++;
+              if (qty == 0 || (min > 0 && qty <= min)) alertCount++;
+            }
+          }
+
+          return NavigationBar(
+            selectedIndex: _currentIndex,
+            onDestinationSelected: (index) =>
+                setState(() => _currentIndex = index),
+            destinations: [
+              const NavigationDestination(
+                icon: Icon(Icons.dashboard_outlined),
+                selectedIcon: Icon(Icons.dashboard),
+                label: 'Dashboard',
+              ),
+              // Badge overlays the count on the Products icon.
+              // isLabelVisible: false hides it when count is zero.
+              NavigationDestination(
+                icon: Badge(
+                  label: Text('$lowStockCount'),
+                  isLabelVisible: lowStockCount > 0,
+                  child: const Icon(Icons.inventory_2_outlined),
+                ),
+                selectedIcon: Badge(
+                  label: Text('$lowStockCount'),
+                  isLabelVisible: lowStockCount > 0,
+                  child: const Icon(Icons.inventory_2),
+                ),
+                label: 'Products',
+              ),
+              const NavigationDestination(
+                icon: Icon(Icons.factory_outlined),
+                selectedIcon: Icon(Icons.factory),
+                label: 'Suppliers',
+              ),
+              NavigationDestination(
+                icon: Badge(
+                  label: Text('$alertCount'),
+                  isLabelVisible: alertCount > 0,
+                  child: const Icon(Icons.notifications_outlined),
+                ),
+                selectedIcon: Badge(
+                  label: Text('$alertCount'),
+                  isLabelVisible: alertCount > 0,
+                  child: const Icon(Icons.notifications),
+                ),
+                label: 'Alerts',
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 
-  // _buildPage() returns the correct widget for the selected tab index
   Widget _buildPage(int index) {
     switch (index) {
       case 0:
@@ -106,38 +139,9 @@ class _MainShellState extends State<MainShell> {
       case 2:
         return const SuppliersPage();
       case 3:
-        return const _PlaceholderPage(
-          icon: Icons.notifications,
-          message: 'Alerts — Coming in Session 7',
-        );
+        return const AlertsPage();
       default:
         return const InventoryPage();
     }
-  }
-}
-
-// _PlaceholderPage is a simple centered message for tabs not yet implemented
-class _PlaceholderPage extends StatelessWidget {
-  final IconData icon;
-  final String message;
-
-  const _PlaceholderPage({required this.icon, required this.message});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 64, color: Colors.grey),
-          const SizedBox(height: 16),
-          Text(
-            message,
-            style: const TextStyle(fontSize: 18, color: Colors.grey),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
   }
 }
