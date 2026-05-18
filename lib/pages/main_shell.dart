@@ -6,6 +6,7 @@ import 'inventory_page.dart';
 import 'suppliers_page.dart';
 import 'profile_page.dart';
 import 'alerts_page.dart';
+import 'chat_page.dart';
 
 // MainShell is the top-level screen shown after login.
 // It owns the AppBar, the bottom NavigationBar, and the low-stock badge count.
@@ -123,6 +124,11 @@ class _MainShellState extends State<MainShell> {
                 ),
                 label: 'Alerts',
               ),
+              NavigationDestination(
+                icon: Icon(Icons.smart_toy_outlined),
+                selectedIcon: Icon(Icons.smart_toy),
+                label: 'Assistant',
+              ),
             ],
           );
         },
@@ -140,6 +146,8 @@ class _MainShellState extends State<MainShell> {
         return const SuppliersPage();
       case 3:
         return const AlertsPage();
+      case 4:
+        return const ChatPage();
       default:
         return const InventoryPage();
     }

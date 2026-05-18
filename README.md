@@ -5481,3 +5481,129 @@ flutter run
 The app is running on the emulator but Firebase is not configured for Android. The fix is simple — you need to run FlutterFire CLI again to add Android support:
 
 flutterfire configure
+
+
+
+# RoadMap after
+
+## TL;DR
+- BMW, Google Pay, Nubank, Alibaba Xianyu and eBay Motors run it at 100M+ user scale; Flutter has been the most-used multi-platform app framework every year since 2021 per JetBrains' State of the Developer Ecosystem, and Apptopia data cited by Google's developer blog (Dec 17, 2024) reports Flutter has "grown steadily in usage from around 10% of all tracked free [iOS] apps in 2021 to nearly 30% of all tracked free apps in 2024."
+- **Supply chain managers who can code are a scarce, premium asset in Berlin:** 90% of supply chain leaders in McKinsey's 2024 survey say they lack the digital talent to meet their digitization goals; a pure SCM Analyst in Berlin earns €41–53K, but a Software Engineer at Berlin logistics scale-up Forto reaches a median total comp of ~€81–93K (Levels.fyi), and at Delivery Hero €100,216 (Levels.fyi, March 2026). Bridging roles pay closer to the upper number.
+- **After the StockFlow basics, your next six months should be: pick one state-management library (Riverpod or Bloc), learn Flutter's three layers of testing, harden your Firebase Security Rules, ship FCM push notifications, and run a real Play Store / TestFlight release through a CI/CD pipeline.**
+
+
+### Topic 1 — Flutter in production at real companies (2024–2025 data)
+
+- **Google Pay** moved a 1.7M-line dual native codebase to a unified Flutter codebase, reducing total lines of code by 35% and engineering effort by ~70%. Serves 100M+ users globally (Flutter showcase; Very Good Ventures 2024–2026 enterprise tracker).
+
+- **BMW (My BMW app)** launched July 2020, now live in 47 countries / 30+ markets across five continents on a single Flutter codebase. BMW's Flutter/Dart team has grown to ~300 engineers, one of the world's largest. Its internal "Mobile 2.0 Platform" builds and deploys 96 app variants daily (BMW Group / Very Good Ventures).
+
+- **eBay Motors** shipped a full iOS + Android beta in three months and a production app in under a year, sharing **98.3% of code** between platforms ("In our codebase, we're sharing 98.6% of the code across Android and iOS," eBay Innovation blog, Larry McKenzie & Corey Sprague). 100% of internal developers in their survey preferred Flutter over native; the team open-sourced its golden-test toolkit `flutter_glove_box` on GitHub.
+
+- **Nubank** — **114.2 million customers** as of full-year 2024 (Nu Holdings Q4 2024 earnings, Feb 20, 2025: "Nu Holdings increased its customer base by 22% in 2024 to reach a total of 114.2 million"; the 100M milestone was officially filed via SEC Form 6-K on May 8, 2024). Flutter PRs merge in **9.9 minutes vs a 70.45-minute multi-platform average** — a 30% better merge-success rate. Life Insurance product launched in 3 months vs the multi-month-to-year cycle before Flutter (Nubank Engineering; Bitrise interview).
+
+- **Alibaba Xianyu (Idle Fish)** — 50M+ users, one of the earliest large-scale Flutter adopters; powers search, listings and product-detail screens.
+- **Wendy's** rewrote mobile ordering in Flutter, reporting 75% faster interaction speeds and higher conversion versus the previous native app (company-reported, via Very Good Ventures).
+- **Reflectly** — 2-engineer team launched iOS + Android in 2.5 months, 50% faster development time and 10% MAU growth post-Flutter.
+- **2024–2025 ecosystem stats**:
+  - **2 million developers** using Flutter (GoodFirms; Flutter team, Google I/O 2025).
+  - **Stack Overflow Developer Survey 2024** (65,000+ respondents): Flutter at **9.4% daily usage** vs React Native at **8.4%** among professional developers.
+  - **JetBrains State of the Developer Ecosystem**: in the 2021 report Flutter "surpassed React Native to become the most popular cross-platform mobile framework…it now leads with a share of 42%," and Google's I/O 2025 Flutter blog (Michael Thomsen) confirms Flutter "has been the most used multi-platform app framework, since 2021" through the 23,262-respondent 2024 survey.
+  - **Apptopia** (cited by Google Developers Blog, Dec 17, 2024 "Celebrating Flutter's Production Era"): "In the Apple AppStore it has grown steadily in usage from around 10% of all tracked free apps in 2021 to nearly 30% of all tracked free apps in 2024."
+  - **Flutter CTO Report 2024** (281 senior dev/CTO respondents, 70 countries): 56.4% of teams say Flutter development is >50% faster than native; combined 81% report ≥20% faster velocity.
+
+- **European / Berlin angle**:
+  - **MOIA** (Volkswagen Group's Berlin/Hamburg-based ride-pooling service): passenger app built in Flutter.
+  - **Lufthansa Group's Miles & More** (Europe's largest frequent-flyer program) is on Flutter.
+  - **easyJet** has modernized its mobile booking experience with Flutter.
+  - **Crédit Agricole Bank Polska, Bricomarché (France), Binance** — all in production with Flutter (LeanCode enterprise list, March 2026).
+  - SoDA's 2024 Digital Agency Operations Report: European agencies use Flutter on **52% of new projects** vs 57% React Native in North America.
+
+### Topic 2 — What a coding-literate supply chain manager is worth in Berlin
+
+**Demand-side reality.** McKinsey's 2024 Global Supply Chain Leader Survey (n = 88 senior executives, fieldwork April–June 2024): **90% of supply chain leaders say they lack sufficient talent and skills to meet their digitization goals** — unchanged since the 2020 baseline. The World Economic Forum (Jan 2025) summarised this as "four of five organizations are experiencing a shortage of skilled workers" for digital roles in supply chain. The Gartner 2025 Supply Chain Tech Trends report identifies the "Augmented Connected Workforce" as a top trend specifically aimed at "addressing the significant skills gap in today's workforce."
+
+**Germany-wide digital talent shortage.** Bitkom's annual "Der Arbeitsmarkt für IT-Fachkräfte" study reported **149,000 unfilled IT specialist positions in Germany in 2023** ("There are currently 149,000 vacancies for IT professionals in German companies. That is 12,000 more than in 2022… On average, it takes 7.7 months to fill a vacant IT position"). Bitkom's August 7, 2025 press release (n = 855 companies) updates the figure to **rund 109,000 IT-Fachkräfte unfilled**, with Bitkom President Dr. Ralf Wintergerst stating: *"Der Fachkräftemangel darf nicht zur Digitalisierungsbremse werden"* — "The skills shortage must not become the brake on digitalization." Bitkom projects a ~663,000 IT specialist shortfall by 2040 without intervention.
+
+**Salary data — Berlin (2025)**:
+
+| Role | Range (€/yr) | Median (€/yr) | Source |
+| Supply Chain Analyst | 41,000 – 53,525 | 49,000 | Glassdoor Berlin |
+| Supply Chain Manager | 47,000 – 74,000 | 55,000 | Glassdoor Berlin |
+| Senior / Global Supply Chain Manager | 60,000 – 122,000 | 95,500 | Glassdoor Berlin |
+| Flutter Developer (all levels) | 47,500 – 87,500 | 68,500 | germantechjobs.de |
+| Senior Flutter Engineer | 76,500 – 83,000 | 79,769 | Glassdoor Berlin |
+| Software Engineer @ Forto | 63,500 – 108,000 (total comp) | **€81,163 – €93,200** total comp | Levels.fyi |
+| Software Engineer @ Delivery Hero | IC1 €62.7K – IC5 €170K | **€100,216 median total comp** | Levels.fyi (March 2026) |
+
+**Implication:** a hybrid M.Sc. SCM + Flutter / Python / SQL profile lands in the €70–95K band 1–3 years out — well above the pure-SCM Analyst median (~€49K) and bumping up against software-engineer pay at the same scale-ups.
+
+**open jobs in Berlin (May 2026):**
+
+- **Zalando** (Berlin HQ, >200 engineers in 30+ Logistics Capabilities teams across Berlin/Dortmund/Erfurt/Mönchengladbach): *Senior Supply Chain Business Analyst (m/w/d)*, *Master Data Specialist (w/m/d)*, *Principal Software Engineer (m/f/d) Logistics Engineering*, *Engineering Lead (Java/Scala/Kotlin) – Logistics Algorithms*, *Senior Network Design Analyst – Logistic Network Design*, *System Engineer – Warehouse IT Technology*.
+- **Delivery Hero**: *Software Engineer (Golang) – Supply Chain (Quick Commerce)*, *Engineer II (Java/Kotlin) – Order Fulfillment (Quick Commerce)*, *Senior Data Engineer – Logistics Data & ML Platform*, *Senior Manager Software Engineering – Logistics, Time Estimations*.
+- **HelloFresh**: *Staff Engineer, Procurement (m/f/x)*, *Senior Software Engineer (HighJump) – Inventory Management*, *Senior Product Manager – Global Operations Analytics and Technology*. The careers page explicitly frames the work: *"Ever wondered how all of our operations are coordinated and how we ensure that we always keep our supply chain efficient?"*
+- **Forto** (digital freight forwarder, 900+ employees, 21 offices, 2,500 customers): *Senior Software Engineer – Shipment* — Node.js/TypeScript/MongoDB, Kubernetes, AWS/GCP, Domain-Driven Design. JD: *"As a Senior Backend Engineer in our Shipment team, you will build the 'brain' behind our logistics operations… From contract rate management to automated shipment nomination, you will lead the charge in creating reliable, data-heavy systems."*
+- **Sennder** (European #1 digital freight forwarder, ~500 staff after acquiring Uber Freight Europe): *Principal Machine Learning Engineer* working on *"pricing optimization, load-to-carrier recommendation, load search and logistics network optimization."*
+- **Clariant** (German chemicals): *Supply Chain Digitalization Manager* — "define and drive the supply chain digitalization road map, via translating the business needs into advanced analytic language and project management."
+- **MHP – A Porsche Company** posts *(Senior) Consultant Supply Chain & Digitalization* in Berlin.
+- Indeed Germany currently lists 75+ active "Supply Chain Digitalization" jobs.
+
+### Topic 3 — What to learn after the StockFlow basics
+
+A focused six-month roadmap, grounded in 2024–25 community data.
+
+**(1) Pick one state-management library and go deep.**
+- **Provider** — Flutter-team endorsed, lowest boilerplate. Good for small/medium apps; the default in most tutorials. Limitation: scales poorly past ~20 screens.
+- **Riverpod 2.x** (by the original Provider author Remi Rousselet) — context-free, compile-time-safe, supports `AsyncNotifier`, `autoDispose`, code generation. **Best default for a new mid-sized project in 2025.**
+- **Bloc 9.x** (`flutter_bloc`) — event/state streams, strict separation of concerns, the dominant choice at large enterprises like Nubank and BMW. Steeper curve but unbeatable for testability and large teams.
+
+**(2) Testing.** Flutter ships three test types out of the box:
+- **Unit tests** with `flutter_test` plus `mocktail`/`mockito`.
+- **Widget tests** — fast, run in a headless Flutter engine.
+- **Integration tests** with the `integration_test` package on real devices.
+- eBay's open-source `flutter_glove_box` (github.com/eBay/flutter_glove_box) is a production-quality golden-test toolkit you can copy.
+
+**(3) Firebase Security Rules.** Your StockFlow Firestore is almost certainly wide open in dev. Before any real launch:
+- Lock down with `request.auth != null` rules per collection, then add role-based checks.
+- Use the **Rules Playground** in the Firebase console plus the **Firebase Local Emulator Suite** (`firebase emulators:start`) for offline rule testing.
+- Reference: firebase.google.com/docs/rules.
+
+**(4) FCM push notifications (Firebase Cloud Messaging).** Concrete stack (December 2024 versions):
+- `firebase_core: ^3.x`, `firebase_messaging: ^15.x`, `flutter_local_notifications: ^17.x`.
+- Use `flutterfire configure` to auto-generate `firebase_options.dart`.
+- Handle three states: foreground (`onMessage`), background (`onBackgroundMessage` with `@pragma('vm:entry-point')`), terminated (`onMessageOpenedApp`).
+- iOS: upload an APNs `.p8` key in Firebase Console; Android: declare a high-importance notification channel in `AndroidManifest.xml`.
+- Docs: firebase.google.com/docs/cloud-messaging/flutter/client and firebase.flutter.dev/docs/messaging/notifications.
+
+**(5) Deployment.** This is the biggest gap in most student projects.
+- **App Store**: Apple Developer Program ($99/year), bundle ID and certificates via Xcode, TestFlight for beta, App Store Connect for review submission.
+- **Google Play**: $25 one-time, internal/closed/open testing tracks, signed `.aab` upload to Play Console.
+- **CI/CD**: use **Codemagic** (free tier for Flutter), **GitHub Actions** with `subosito/flutter-action`, or **Bitrise** (the CI Nubank uses). Add Fastlane for store automation.
+
+**(6) Architecture beyond StockFlow.**
+- Move toward **Clean Architecture** (presentation / domain / data layers).
+- Adopt **go_router** for declarative routing (deep links, web URLs).
+- For backend logic that doesn't belong in the client, learn **Cloud Functions for Firebase** (Node.js/TypeScript).
+
+** free/cheap resources**:
+- Official Flutter docs: docs.flutter.dev (especially "Architectural overview" and "Testing & debugging").
+- Coursera: "Flutter Learning Roadmap: From Beginner to Expertise (2026)".
+- roadmap.sh/flutter — open-source community roadmap.
+- AppBrewery's Flutter Bootcamp (the same course the eBay Motors team used to onboard).
+- Very Good Ventures open-source: `very_good_cli` for project scaffolding, the `bloc` library, and their published Flutter CTO Report 2024.
+
+## Details
+
+### Why this matters for SCM graduates specifically
+The McKinsey survey result 90% of supply chain leaders can't find the digital talent they need — is a hiring-side number, not a feel-good slide. It means Berlin employers are simultaneously paying a 30–50% premium for engineers who understand supply chains, AND for SCM professionals who can read code, write SQL, and prototype with tools like Flutter/Firebase. McKinsey's case study of a CPG firm that hired data scientists who "lacked an end-to-end understanding of supply-chain management" is the central business case for the StockFlow course: companies want translators, not just coders.
+
+Berlin is uniquely positioned: it concentrates digital freight (**Forto** — 900+ staff, 21 offices, 2,500 customers, Berlin HQ; **Sennder** — European #1 digital freight forwarder), quick commerce (Flink, Gorillas/Getir, Delivery Hero's Dmart), fashion supply chains (Zalando, About You), and meal-kit operations (HelloFresh). All publicly hire software engineers attached to logistics, fulfilment or procurement teams.
+
+
+### For students, ranked by impact
+
+1. **In the next weeks: ship StockFlow.** Deploy to Google Play Closed Testing AND TestFlight. Do not stop at "it runs in the emulator." That single line on your CV — "Shipped a Flutter app on Play Store and TestFlight, with Firestore Security Rules and FCM push" — beats six months of tutorial-watching. rewrite StockFlow's state with Riverpod (or Bloc if you target Forto/Zalando), and write at least 30 unit + widget tests.** Aim for 60%+ coverage. Open-source the result on GitHub.
+2. **In the next weeks after: add a real CI pipeline** (Codemagic free tier or GitHub Actions), Firebase Crashlytics and FCM. You will now have replicated the production stack of a mid-size Berlin scale-up.
+4. **In parallel career.** Apply this month to the specific Berlin roles named above: Zalando *Senior Supply Chain Business Analyst*, Delivery Hero *Engineer II – Order Fulfillment (Quick Commerce)*, HelloFresh *Staff Engineer – Procurement*, Forto *Senior Software Engineer – Shipment*, Sennder *Principal ML Engineer*, MHP *Consultant Supply Chain & Digitalization*. Even where the JD asks for a CS background, an M.Sc. SCM with a shipped Flutter+Firebase app on GitHub is a stronger signal than another CS grad with only academic projects.
+5. **For the long arc, target the hybrid title that doesn't yet have a standard name** — "Supply Chain Engineer", "Digital Supply Chain Manager", "Logistics Product Manager (Technical)". This is the role McKinsey, Gartner and WEF all describe as the bottleneck for digital supply-chain transformation, and the role Bitkom's 109K-vacancy data quantifies in EUR.
